@@ -1,0 +1,219 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id                String    @id @default(cuid())
+  name              String?
+  email             String?   @unique
+  emailVerified     DateTime?
+  image             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Subscription
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  stripePriceId        String?
+  stripeCurrentPeriodEnd DateTime?
+  plan                 Plan      @default(FREE)
+
+  // Relations
+  accounts     Account[]
+  sessions     Session[]
+  meetings     Meeting[]
+  tasks        Task[]
+  teamMembers  TeamMember[]
+  organizations OrganizationMember[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members  OrganizationMember[]
+  meetings Meeting[]
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           OrgRole      @default(MEMBER)
+  joinedAt       DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Meeting {
+  id             String        @id @default(cuid())
+  title          String
+  description    String?
+  startedAt      DateTime
+  endedAt        DateTime?
+  duration       Int?          // seconds
+  status         MeetingStatus @default(SCHEDULED)
+  platform       String?       // zoom, meet, teams, in-person
+  recordingUrl   String?
+  audioFileKey   String?       // S3/storage key
+  hostId         String
+  organizationId String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  host         User          @relation(fields: [hostId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  transcript   Transcript?
+  summary      Summary?
+  tasks        Task[]
+  participants TeamMember[]
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  RECORDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model TeamMember {
+  id        String  @id @default(cuid())
+  meetingId String
+  userId    String?
+  name      String
+  email     String?
+  role      String? // host, attendee
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
+}
+
+model Transcript {
+  id        String              @id @default(cuid())
+  meetingId String              @unique
+  fullText  String              @db.Text
+  language  String              @default("en")
+  segments  TranscriptSegment[]
+  createdAt DateTime            @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model TranscriptSegment {
+  id           String  @id @default(cuid())
+  transcriptId String
+  speaker      String?
+  text         String  @db.Text
+  startTime    Float
+  endTime      Float
+  confidence   Float?
+
+  transcript Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+}
+
+model Summary {
+  id           String   @id @default(cuid())
+  meetingId    String   @unique
+  tldr         String   @db.Text
+  keyPoints    Json     // string[]
+  decisions    Json     // string[]
+  nextSteps    Json     // string[]
+  sentiment    String?  // positive, neutral, negative
+  topics       Json?    // string[]
+  createdAt    DateTime @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?    @db.Text
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(MEDIUM)
+  dueDate     DateTime?
+  meetingId   String?
+  assigneeId  String?
+  createdById String
+  externalId  String?    // Jira/Linear/Asana ticket ID
+  externalUrl String?
+  source      String?    // meeting-ai, manual
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  meeting  Meeting? @relation(fields: [meetingId], references: [id])
+  assignee User?    @relation(fields: [assigneeId], references: [id])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
