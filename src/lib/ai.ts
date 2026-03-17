@@ -10,7 +10,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? proce
 // ─── Transcription ────────────────────────────────────────────────────────────
 
 export async function transcribeAudio(audioBuffer: Buffer, filename: string): Promise<string> {
-  const file = new File([audioBuffer], filename, { type: "audio/webm" })
+  const file = new File([new Uint8Array(audioBuffer)], filename, { type: "audio/webm" })
 
   const response = await openai.audio.transcriptions.create({
     file,
