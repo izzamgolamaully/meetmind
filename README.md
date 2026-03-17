@@ -1,6 +1,6 @@
 # MeetMind — AI Meeting Intelligence Platform
 
-> Record, transcribe, summarise, and track tasks from every meeting — powered by Claude AI + OpenAI Whisper.
+> Record, transcribe, summarise, and track tasks from every meeting 
 
 ---
 
